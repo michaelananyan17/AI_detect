@@ -14,6 +14,7 @@
 
     <style>
         /* Custom scrollbar and link color matching the primary blue */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
         .container {
             font-family: 'Inter', sans-serif;
         }
@@ -22,15 +23,28 @@
         .bg-primary-hover:hover { background-color: #0d62c9; }
         
         /* Ensures tfjs-vis visualizations are responsive */
-        #charts, #training-vis, #confusion-matrix {
+        #charts, #training-vis {
             width: 100%;
-            height: 400px;
+            min-height: 400px;
+        }
+        /* Custom height for Confusion Matrix text box */
+        #confusion-matrix {
+            min-height: 150px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         /* Responsive table for data preview */
         .data-preview table {
             min-width: 600px;
         }
+        
+        /* Disabled state styling */
+        .bg-gray-400 {
+            cursor: not-allowed;
+        }
+        
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800 p-4 sm:p-8">
@@ -42,8 +56,8 @@
         
         <!-- ================================== 1. DATA LOAD ================================== -->
         <section id="data-load" class="bg-white p-6 rounded-xl shadow-lg mb-8">
-            <h2 class="text-2xl font-semibold text-primary mb-4">1. Data Load</h2>
-            <p class="mb-4 text-gray-600">Upload your training and test CSV files. The code expects `train.csv` to contain the text and the "AI/Human" label (0/1), and `test.csv` to contain only the text for prediction.</p>
+            <h2 class="text-2xl font-semibold text-primary mb-4">1. Data Load & Column Fix</h2>
+            <p class="mb-4 text-gray-600">The code is now optimized to automatically find the **Label (0/1)** in the second column and the main **Text Content** in the final column of your CSV.</p>
             
             <div class="space-y-4">
                 <div class="flex flex-col sm:flex-row sm:items-center">
@@ -51,12 +65,12 @@
                     <input type="file" id="train-file" accept=".csv" class="ml-0 sm:ml-4 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-blue-600">
                 </div>
                 <div class="flex flex-col sm:flex-row sm:items-center">
-                    <label for="test-file" class="w-48 font-medium">Test Data (test.csv):</label>
+                    <label for="test-file" class="w-48 font-medium">Prediction Data (test.csv):</label>
                     <input type="file" id="test-file" accept=".csv" class="ml-0 sm:ml-4 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-blue-600">
                 </div>
             </div>
             
-            <button id="load-data-btn" onclick="loadData()" class="mt-6 px-6 py-2 rounded-full bg-primary text-white font-bold transition duration-150 bg-primary-hover">Load Data</button>
+            <button id="load-data-btn" onclick="handleLoadData()" class="mt-6 px-6 py-2 rounded-full bg-primary text-white font-bold transition duration-150 bg-primary-hover">Load Data</button>
             <div id="data-status" class="mt-4 font-medium"></div>
         </section>
 
@@ -71,7 +85,7 @@
             <div id="data-preview" class="data-preview overflow-x-auto border rounded-lg p-2"></div>
             
             <h3 class="text-xl font-semibold mt-6 mb-3">Class Balance Visualization</h3>
-            <div id="charts"></div>
+            <div id="charts" class="border rounded-lg p-2"></div>
         </section>
 
         <!-- ================================== 3. PREPROCESSING & TOKENIZATION ================================== -->
@@ -92,14 +106,14 @@
                 </div>
             </div>
             
-            <button id="preprocess-btn" onclick="preprocessData()" disabled class="px-6 py-2 rounded-full bg-gray-400 text-white font-bold transition duration-150 disabled:opacity-50">Preprocess Data</button>
+            <button id="preprocess-btn" onclick="preprocessData()" disabled class="px-6 py-2 rounded-full bg-gray-400 text-white font-bold transition duration-150 disabled:opacity-50">Preprocess Data (80/20 Split)</button>
             <div id="preprocessing-output" class="mt-4 font-medium"></div>
         </section>
 
         <!-- ================================== 4. TEXT EMBEDDING ================================== -->
         <section id="embedding" class="bg-white p-6 rounded-xl shadow-lg mb-8">
             <h2 class="text-2xl font-semibold text-primary mb-4">4. Text Embedding</h2>
-            <p class="mb-4 text-gray-600">The first layer in the model converts the token indices into dense numerical vectors. This step determines the final vocabulary size.</p>
+            <p class="mb-4">The first layer in the model converts the token indices into dense numerical vectors. This step determines the final vocabulary size.</p>
             
             <button id="create-embedding-btn" onclick="createEmbeddingModel()" disabled class="px-6 py-2 rounded-full bg-gray-400 text-white font-bold transition duration-150 disabled:opacity-50">Define Vocabulary & Embedding</button>
             <div id="embedding-status" class="mt-4 font-medium"></div>
@@ -107,7 +121,7 @@
 
         <!-- ================================== 5. MODEL SETUP ================================== -->
         <section id="model" class="bg-white p-6 rounded-xl shadow-lg mb-8">
-            <h2 class="text-2xl font-semibold text-primary mb-4">5. Model Setup (RNN/CNN)</h2>
+            <h2 class="text-2xl font-semibold text-primary mb-4">5. Model Setup (CNN/MaxPool)</h2>
             <button id="create-model-btn" onclick="createModel()" disabled class="px-6 py-2 rounded-full bg-gray-400 text-white font-bold transition duration-150 disabled:opacity-50">Create Model</button>
             <div id="model-summary" class="mt-4 p-4 bg-gray-100 rounded-lg overflow-x-auto"></div>
         </section>
@@ -115,11 +129,11 @@
         <!-- ================================== 6. TRAINING ================================== -->
         <section id="training" class="bg-white p-6 rounded-xl shadow-lg mb-8">
             <h2 class="text-2xl font-semibold text-primary mb-4">6. Training</h2>
-            <p class="mb-4">Monitor the loss and accuracy below during training.</p>
+            <p class="mb-4">Monitor the loss and accuracy (including validation metrics) below during training.</p>
             <button id="train-btn" onclick="trainModel()" disabled class="px-6 py-2 rounded-full bg-gray-400 text-white font-bold transition duration-150 disabled:opacity-50">Train Model</button>
             
             <div id="training-status" class="mt-4 font-medium"></div>
-            <div id="training-vis" class="mt-4"></div>
+            <div id="training-vis" class="mt-4 border rounded-lg p-2"></div>
         </section>
         
         <!-- ================================== 7. LIVE PREDICTION ================================== -->
@@ -139,8 +153,8 @@
 
         <!-- ================================== 8. EVALUATION & METRICS ================================== -->
         <section id="metrics" class="bg-white p-6 rounded-xl shadow-lg mb-8">
-            <h2 class="text-2xl font-semibold text-primary mb-4">8. Evaluation & Metrics (on Test Set)</h2>
-            <button id="predict-btn" onclick="predict()" disabled class="px-6 py-2 rounded-full bg-gray-400 text-white font-bold transition duration-150 disabled:opacity-50">Predict on Test Data</button>
+            <h2 class="text-2xl font-semibold text-primary mb-4">8. Evaluation & Metrics (<span class="text-green-600">Validation Set</span>)</h2>
+            <button id="evaluate-btn" onclick="evaluateModel()" disabled class="px-6 py-2 rounded-full bg-gray-400 text-white font-bold transition duration-150 disabled:opacity-50">Evaluate on Validation Data</button>
             <div id="prediction-output" class="mt-4 font-medium"></div>
 
             <div class="slider-container mt-6">
@@ -165,8 +179,8 @@
 
         <!-- ================================== 9. EXPORT RESULTS ================================== -->
         <section id="export" class="bg-white p-6 rounded-xl shadow-lg mb-8">
-            <h2 class="text-2xl font-semibold text-primary mb-4">9. Export Results</h2>
-            <button id="export-btn" onclick="exportResults()" disabled class="px-6 py-2 rounded-full bg-gray-400 text-white font-bold transition duration-150 disabled:opacity-50">Export Predictions</button>
+            <h2 class="text-2xl font-semibold text-primary mb-4">9. Export Predictions (on test.csv)</h2>
+            <button id="export-btn" onclick="exportResults()" disabled class="px-6 py-2 rounded-full bg-gray-400 text-white font-bold transition duration-150 disabled:opacity-50">Generate Prediction Results CSV</button>
             <div id="export-status" class="mt-4 font-medium"></div>
         </section>
         
@@ -178,28 +192,28 @@
     // ==================================================================================
 
     // Global State Variables
-    let trainData = null;
-    let testData = null;
+    let trainData = null; // Stored as [[Label, Text], ...]
+    let testData = null;  // Stored as [[Label, Text], ...]
     let model = null;
     let tokenizer = null;
-    let xTrain, yTrain, xTestRaw, yTest, predictions;
+    
+    // Tensors for Training and Validation
+    let xTrain, yTrain, xVal, yVal; 
+    
+    // Raw Data and Padded Sequences for Test Set
+    let testSequencesPadded;
+    let valProbAI; // Model predictions on the validation set
 
     // Hyperparameters - Initialized to reflect the UI
     let MAX_LEN = 100;
     let EMBEDDING_DIM = 32;
-    const VOCAB_SIZE = 20000; // Large enough starting vocabulary
-
-    // CSV Column Indices Assumption (CRITICAL: Adjust these based on your actual CSV format)
-    // The code assumes the following structure for train.csv:
-    // Column Index 1: Label (0 or 1)
-    // Column Index 3: Text Content
-    const LABEL_COL = 1;
-    const TEXT_COL = 3;
+    const VOCAB_SIZE = 20000; 
 
     // Utility Functions
     const enableButton = (id, state) => {
-        document.getElementById(id).disabled = !state;
         const btn = document.getElementById(id);
+        if (!btn) return;
+        btn.disabled = !state;
         if (state) {
             btn.classList.remove('bg-gray-400', 'cursor-not-allowed');
             btn.classList.add('bg-primary', 'bg-primary-hover');
@@ -214,11 +228,72 @@
         el.className = 'mt-4 font-medium ' + (isError ? 'text-red-600' : 'text-green-600');
         el.innerText = message;
     };
+    
+    /**
+     * Cleans text that is highly quoted (a common CSV artifact).
+     * @param {string} text - The raw text from the CSV cell.
+     * @returns {string} The cleaned text.
+     */
+    const cleanTextContent = (text) => {
+        let s = String(text || '').trim();
+        // Remove outer brackets and excess quotes if present: '[""content""]'
+        if (s.startsWith('[""') && s.endsWith('""]')) {
+            s = s.substring(3, s.length - 3);
+        } else if (s.startsWith('"') && s.endsWith('"')) {
+            s = s.substring(1, s.length - 1);
+        }
+        // Remove escaped newlines and internal escaped quotes
+        s = s.replace(/\\n/g, ' ').replace(/\\\"/g, '"');
+        return s.trim();
+    };
+
+    /**
+     * Reads and parses a CSV file using PapaParse, extracting only the Label (Col 2 / Index 1) 
+     * and the main Text Content (Last Column).
+     * @param {File} file - The uploaded CSV file.
+     * @returns {Promise<Array<Array<string>>>} The cleaned data array [[Label, Text], ...]
+     */
+    const loadCSVAndClean = (file) => new Promise((resolve, reject) => {
+        Papa.parse(file, {
+            header: false,
+            dynamicTyping: false,
+            skipEmptyLines: true,
+            complete: (results) => {
+                let rows = results.data;
+                if (!rows || rows.length < 2) {
+                    return reject(new Error("File is too short or empty."));
+                }
+                
+                // Skip the header row
+                rows = rows.slice(1);
+                const cleanedData = [];
+
+                for (const row of rows) {
+                    // We assume Label is in Column 2 (Index 1) and Text is in the last column
+                    if (row.length < 2) continue;
+
+                    const labelRaw = row[1]; // Index 1 is the Label (0 or 1)
+                    const textRaw = row[row.length - 1]; // Last column is the question/content
+
+                    // Robustly validate and clean the content
+                    const label = String(labelRaw).trim();
+                    let text = cleanTextContent(textRaw);
+                    
+                    if ((label === '0' || label === '1' || label === 0 || label === 1) && text.length > 5) {
+                        // Store the data in the simple format: [Label, Text]
+                        cleanedData.push([String(label), text]);
+                    }
+                }
+                resolve(cleanedData);
+            },
+            error: (error) => reject(error)
+        });
+    });
 
     // ==================================================================================
-    // Step 1: Data Load
+    // Step 1: Data Load Handler
     // ==================================================================================
-    window.loadData = async () => {
+    window.handleLoadData = async () => {
         updateStatus('data-status', 'Loading data...');
         enableButton('load-data-btn', false);
 
@@ -230,37 +305,18 @@
             enableButton('load-data-btn', true);
             return;
         }
-        
-        if (trainFile.name !== 'train.csv' || testFile.name !== 'test.csv') {
-             updateStatus('data-status', 'File names must be exactly "train.csv" and "test.csv". Please rename and re-upload.', true);
-             enableButton('load-data-btn', true);
-             return;
-        }
 
         try {
-            // Function to parse a single CSV file
-            const parseCSV = (file) => new Promise((resolve, reject) => {
-                Papa.parse(file, {
-                    header: false, // We'll handle columns by index
-                    dynamicTyping: false,
-                    skipEmptyLines: true,
-                    complete: (results) => {
-                        // Skip the header row (assuming row 0 is header)
-                        resolve(results.data.slice(1));
-                    },
-                    error: (error) => reject(error)
-                });
-            });
-
-            trainData = await parseCSV(trainFile);
-            testData = await parseCSV(testFile);
+            // Load and clean the data
+            trainData = await loadCSVAndClean(trainFile);
+            testData = await loadCSVAndClean(testFile);
 
             if (trainData.length === 0 || testData.length === 0) {
-                throw new Error("One or both datasets are empty after parsing.");
+                throw new Error("One or both datasets are empty after cleaning. Check that labels are in column 2 and text is in the final column.");
             }
 
             updateStatus('data-status', 
-                `✅ Data loaded successfully. Train samples: ${trainData.length}, Test samples: ${testData.length}.`,
+                `✅ Data loaded and cleaned successfully. Train samples: ${trainData.length}, Test samples: ${testData.length}.`,
                 false
             );
 
@@ -278,21 +334,26 @@
     // Step 2: Data Inspection
     // ==================================================================================
     window.inspectData = async () => {
-        if (!trainData) return;
+        if (!trainData || trainData.length === 0) return;
         enableButton('inspect-btn', false);
 
-        // 1. Calculate Statistics and Preview
-        const labels = trainData.map(row => row[LABEL_COL] === '1' || row[LABEL_COL] === 1 ? 1 : 0);
+        // Data is now in the format: [[Label, Text], ...]
+        const labels = trainData.map(row => parseInt(row[0]));
+        const texts = trainData.map(row => row[1]); 
+
         const totalSamples = trainData.length;
         const humanCount = labels.filter(l => l === 0).length;
         const aiCount = labels.filter(l => l === 1).length;
 
+        const humanPercent = ((humanCount / totalSamples) * 100);
+        const aiPercent = ((aiCount / totalSamples) * 100);
+
         const statsHtml = `
-            <p><strong>Total Train Samples:</strong> ${totalSamples}</p>
-            <p><strong>Human (Label 0) Samples:</strong> ${humanCount} (${((humanCount / totalSamples) * 100).toFixed(1)}%)</p>
-            <p><strong>AI (Label 1) Samples:</strong> ${aiCount} (${((aiCount / totalSamples) * 100).toFixed(1)}%)</p>
-            <p class="${(humanCount / totalSamples > 0.6 || aiCount / totalSamples > 0.6) ? 'text-red-500' : 'text-green-500'}">
-                <strong>Class Balance:</strong> ${(humanCount / totalSamples > 0.6 || aiCount / totalSamples > 0.6) ? 'Imbalanced' : 'Balanced'}
+            <p><strong>Total Cleaned Train Samples:</strong> ${totalSamples}</p>
+            <p><strong>Human (Label 0) Samples:</strong> ${humanCount} (${humanPercent.toFixed(1)}%)</p>
+            <p><strong>AI (Label 1) Samples:</strong> ${aiCount} (${aiPercent.toFixed(1)}%)</p>
+            <p class="${(humanPercent < 40 || aiPercent < 40) ? 'text-red-500' : 'text-green-500'}">
+                <strong>Class Balance:</strong> ${(humanPercent < 40 || aiPercent < 40) ? 'Imbalanced (Consider sampling methods)' : 'Balanced (Good starting point)'}
             </p>
         `;
         document.getElementById('data-stats').innerHTML = statsHtml;
@@ -309,12 +370,14 @@
             <tbody class="bg-white divide-y divide-gray-200">
         `;
         previewRows.forEach(row => {
-            const label = row[LABEL_COL];
-            const text = String(row[TEXT_COL] || '').substring(0, 100) + '...';
+            const label = row[0];
+            const textContent = row[1];
+            const textSnippet = textContent.substring(0, 100).replace(/\n/g, ' ') + (textContent.length > 100 ? '...' : '');
+
             tableHtml += `
                 <tr>
                     <td class="px-6 py-4 whitespace-nowrap">${label}</td>
-                    <td class="px-6 py-4 text-sm text-gray-900">${text}</td>
+                    <td class="px-6 py-4 text-sm text-gray-900">${textSnippet}</td>
                 </tr>
             `;
         });
@@ -341,64 +404,58 @@
     // Step 3 & 4: Preprocessing, Tokenization, & Embedding Setup
     // ==================================================================================
     window.preprocessData = async () => {
-        updateStatus('preprocessing-output', 'Tokenizing data and defining vocabulary...');
+        updateStatus('preprocessing-output', 'Tokenizing data, defining vocabulary, and splitting into Train/Validation sets (80/20)...');
         enableButton('preprocess-btn', false);
 
         // Update Hyperparameters from UI
         MAX_LEN = parseInt(document.getElementById('max-len').value);
         EMBEDDING_DIM = parseInt(document.getElementById('embedding-dim').value);
         
-        if (isNaN(MAX_LEN) || MAX_LEN < 10) {
-            updateStatus('preprocessing-output', 'Invalid Max Sequence Length.', true);
-            enableButton('preprocess-btn', true);
-            return;
-        }
-        if (isNaN(EMBEDDING_DIM) || EMBEDDING_DIM < 8) {
-            updateStatus('preprocessing-output', 'Invalid Embedding Dimension.', true);
-            enableButton('preprocess-btn', true);
-            return;
-        }
+        // 1. Separate features (text) and labels from the cleaned data
+        const allTrainTexts = trainData.map(row => row[1]);
+        const allTrainLabels = trainData.map(row => parseInt(row[0]));
+        
+        // Raw test data texts
+        const xTestRaw = testData.map(row => row[1]); 
 
-        // 1. Separate features (text) and labels
-        const trainTexts = trainData.map(row => String(row[TEXT_COL]));
-        const trainLabels = trainData.map(row => parseInt(row[LABEL_COL] === '1' || row[LABEL_COL] === 1 ? 1 : 0));
-        xTestRaw = testData.map(row => String(row[TEXT_COL]));
+        // 1.1 SPLIT TRAIN DATA (80% Train, 20% Validation)
+        const splitIndex = Math.floor(allTrainTexts.length * 0.8);
 
-        // 2. Tokenization - Create Vocabulary
+        const rawTrainTexts = allTrainTexts.slice(0, splitIndex);
+        const rawTrainLabels = allTrainLabels.slice(0, splitIndex);
+
+        const rawValTexts = allTrainTexts.slice(splitIndex);
+        const rawValLabels = allTrainLabels.slice(splitIndex);
+
+        // 2. Tokenization - Create Vocabulary (fit only on RAW TRAIN texts)
         tokenizer = new tf.data.Tokenizer({ numWords: VOCAB_SIZE });
-        tokenizer.fitOnTexts(trainTexts);
+        tokenizer.fitOnTexts(rawTrainTexts);
 
         // 3. Convert texts to sequences of integers
-        const sequences = tokenizer.textsToSequences(trainTexts);
+        const trainSequences = tokenizer.textsToSequences(rawTrainTexts);
+        const valSequences = tokenizer.textsToSequences(rawValTexts);
         const testSequences = tokenizer.textsToSequences(xTestRaw);
 
         // 4. Padding/Truncation
-        xTrain = tf.data.sequence.padSequences(sequences, { maxLen: MAX_LEN });
-        
-        // Save test sequences for later use in prediction
-        // We do not pad test sequences yet to avoid large tensor in global scope
-        const paddedTestSequences = tf.data.sequence.padSequences(testSequences, { maxLen: MAX_LEN });
+        xTrain = tf.data.sequence.padSequences(trainSequences, { maxLen: MAX_LEN });
+        xVal = tf.data.sequence.padSequences(valSequences, { maxLen: MAX_LEN });
+        testSequencesPadded = tf.data.sequence.padSequences(testSequences, { maxLen: MAX_LEN });
         
         // 5. Convert labels to one-hot tensors
-        const labelsTensor = tf.tensor1d(trainLabels, 'int32');
-        yTrain = tf.oneHot(labelsTensor, 2); // 2 classes (AI, Human)
-        
-        // Clean up memory
-        labelsTensor.dispose();
+        const trainLabelsTensor = tf.tensor1d(rawTrainLabels, 'int32');
+        yTrain = tf.oneHot(trainLabelsTensor, 2);
 
-        // Display padding info
-        const avgLength = trainTexts.map(t => t.split(' ').length).reduce((a, b) => a + b) / trainTexts.length;
+        const valLabelsTensor = tf.tensor1d(rawValLabels, 'int32');
+        yVal = tf.oneHot(valLabelsTensor, 2);
+
+        // Clean up memory
+        trainLabelsTensor.dispose();
+        valLabelsTensor.dispose();
 
         updateStatus('preprocessing-output', 
-            `✅ Tokenization complete. Max-Length: ${MAX_LEN}, Avg Text Length: ${avgLength.toFixed(1)} words.`,
+            `✅ Preprocessing complete. Train samples: ${rawTrainTexts.length}, Validation samples: ${rawValTexts.length}.`,
             false
         );
-        
-        // Store test data as a tensor
-        yTest = tf.tensor2d(trainLabels, [trainLabels.length, 2]); // Using train labels as "ground truth" for evaluation
-        
-        // Store padded test sequences for prediction on test set
-        predictions = { sequences: paddedTestSequences };
         
         // Enable Embedding step
         enableButton('create-embedding-btn', true);
@@ -408,7 +465,6 @@
     };
 
     window.createEmbeddingModel = async () => {
-        // This step is mostly to show the user the parameter definitions have been accepted.
         enableButton('create-embedding-btn', false);
         document.getElementById('embedding-status').innerHTML += `<p class="text-green-600 font-bold mt-2">✅ Embedding parameters finalized. Ready for Model Setup.</p>`;
         enableButton('create-model-btn', true);
@@ -425,41 +481,46 @@
         enableButton('create-model-btn', false);
         document.getElementById('model-summary').innerText = 'Building model...';
 
-        const vocabSize = tokenizer.wordIndex.length + 1; // +1 for padding/unknown
+        tf.tidy(() => {
+            const vocabSize = tokenizer.wordIndex.length + 1; // +1 for padding/unknown
 
-        model = tf.sequential();
-        
-        // 1. Embedding Layer: Converts token indices to dense vectors
-        model.add(tf.layers.embedding({
-            inputDim: vocabSize,
-            outputDim: EMBEDDING_DIM,
-            inputLength: MAX_LEN
-        }));
+            model = tf.sequential();
+            
+            // 1. Embedding Layer: Converts token indices to dense vectors
+            model.add(tf.layers.embedding({
+                inputDim: vocabSize,
+                outputDim: EMBEDDING_DIM,
+                inputLength: MAX_LEN
+            }));
 
-        // 2. Recurrent Layer (LSTM)
-        model.add(tf.layers.lstm({
-            units: 64,
-            activation: 'relu',
-            returnSequences: false // Output should be a single vector per sequence
-        }));
+            // 2. Convolutional Layer for feature extraction
+            model.add(tf.layers.conv1d({
+                filters: 128,
+                kernelSize: 5,
+                activation: 'relu'
+            }));
+            
+            // 3. Global Max Pooling to reduce feature dimension
+            model.add(tf.layers.globalMaxPool1d({}));
 
-        // 3. GlobalMaxPooling1D (Alternative to flatten, optional but good for text)
-        // model.add(tf.layers.globalMaxPool1d({}));
-        
-        // 4. Dropout for regularization
-        model.add(tf.layers.dropout({ rate: 0.5 }));
+            // 4. Dense Layer
+            model.add(tf.layers.dense({ units: 10, activation: 'relu' }));
+            
+            // 5. Dropout for regularization
+            model.add(tf.layers.dropout({ rate: 0.5 }));
 
-        // 5. Output Layer: Softmax for binary classification (2 units for one-hot encoding)
-        model.add(tf.layers.dense({
-            units: 2,
-            activation: 'softmax'
-        }));
+            // 6. Output Layer: Softmax for binary classification (2 units for one-hot encoding)
+            model.add(tf.layers.dense({
+                units: 2,
+                activation: 'softmax'
+            }));
 
-        // Compile the model
-        model.compile({
-            optimizer: tf.train.adam(0.001),
-            loss: 'binaryCrossentropy',
-            metrics: ['accuracy']
+            // Compile the model
+            model.compile({
+                optimizer: tf.train.adam(0.001),
+                loss: 'binaryCrossentropy',
+                metrics: ['accuracy']
+            });
         });
 
         // Display model summary (tfjs-vis)
@@ -468,7 +529,7 @@
         document.getElementById('model-summary').innerText = '✅ Model built and compiled successfully. Check the "Model" tab for details.';
         
         enableButton('train-btn', true);
-        enableButton('live-predict-btn', true); // Enable live prediction since the model structure is ready
+        enableButton('live-predict-btn', true); 
     };
 
     // ==================================================================================
@@ -478,18 +539,19 @@
         if (!model || !xTrain) return;
 
         enableButton('train-btn', false);
-        document.getElementById('training-status').innerText = 'Training in progress...';
+        document.getElementById('training-status').innerText = 'Training in progress... (This may take several minutes)';
 
         const params = { epochs: 10, batchSize: 32 };
 
         const trainSurface = tfvis.visor().surface({ name: 'Model Training', tab: 'Training' });
-        const history = await model.fit(xTrain, yTrain, {
+        await model.fit(xTrain, yTrain, {
             epochs: params.epochs,
             batchSize: params.batchSize,
             shuffle: true,
+            validationData: [xVal, yVal], // Use validation data for monitoring
             callbacks: tfvis.show.fitCallbacks(
                 trainSurface,
-                ['loss', 'acc'],
+                ['loss', 'acc', 'val_loss', 'val_acc'], // Display validation metrics
                 { callbacks: ['onEpochEnd'] }
             )
         });
@@ -497,8 +559,7 @@
         document.getElementById('training-status').innerText = '✅ Training complete!';
         
         // Enable prediction steps
-        enableButton('predict-btn', true);
-        document.getElementById('threshold-slider').disabled = false;
+        enableButton('evaluate-btn', true);
     };
 
 
@@ -511,7 +572,7 @@
             document.getElementById('live-prediction-output').classList.remove('hidden');
             return;
         }
-
+        
         const text = document.getElementById('user-text-input').value;
         const outputDiv = document.getElementById('live-prediction-output');
         
@@ -524,34 +585,28 @@
         enableButton('live-predict-btn', false);
         outputDiv.classList.add('hidden');
 
-        await tf.nextFrame(); // Allows UI update before calculation
+        await tf.nextFrame();
 
         tf.tidy(() => {
-            // 1. Tokenize the input text
             const sequence = tokenizer.textsToSequences([text]);
-            
-            // 2. Pad the sequence
             const paddedSequence = tf.data.sequence.padSequences(sequence, { maxLen: MAX_LEN });
-            
-            // 3. Convert to Tensor
             const inputTensor = tf.tensor2d(paddedSequence, [1, MAX_LEN]);
 
-            // 4. Predict
             const prediction = model.predict(inputTensor);
             const probAI = prediction.dataSync()[1]; // Probability for class 1 (AI)
             const probHuman = prediction.dataSync()[0]; // Probability for class 0 (Human)
 
             const confidence = Math.max(probAI, probHuman) * 100;
-            const label = probAI > probHuman ? 'AI Generated (1)' : 'Human Generated (0)';
-            const colorClass = probAI > probHuman ? 'text-red-600' : 'text-green-600';
+            const label = probAI > 0.5 ? 'AI Generated (1)' : 'Human Generated (0)';
+            const colorClass = probAI > 0.5 ? 'text-red-600' : 'text-green-600';
 
             document.getElementById('live-result-label').innerText = label;
             document.getElementById('live-result-label').className = colorClass;
             document.getElementById('live-result-conf').innerText = `${confidence.toFixed(2)}%`;
 
             outputDiv.classList.remove('hidden');
-            outputDiv.classList.remove('bg-blue-50', 'border-blue-200');
-            outputDiv.classList.add(probAI > probHuman ? 'bg-red-50' : 'bg-green-50');
+            outputDiv.classList.remove('bg-blue-50', 'border-blue-200', 'bg-red-50', 'bg-green-50');
+            outputDiv.classList.add(probAI > 0.5 ? 'bg-red-50' : 'bg-green-50', probAI > 0.5 ? 'border-red-200' : 'border-green-200');
             
             inputTensor.dispose();
             prediction.dispose();
@@ -561,49 +616,52 @@
     };
 
     // ==================================================================================
-    // Step 8: Evaluation & Metrics (on Test Set)
+    // Step 8: Evaluation & Metrics (on Validation Set)
     // ==================================================================================
-    window.predict = async () => {
-        if (!model || !predictions || !predictions.sequences) return;
-        enableButton('predict-btn', false);
-        document.getElementById('prediction-output').innerText = 'Running predictions on test set...';
+    window.evaluateModel = async () => {
+        if (!model || !xVal) return;
+        enableButton('evaluate-btn', false);
+        document.getElementById('prediction-output').innerText = 'Running predictions on validation set...';
 
         await tf.nextFrame();
 
         tf.tidy(() => {
-            const testTensor = predictions.sequences;
-            const rawPredictions = model.predict(testTensor);
-            const probAI = rawPredictions.slice([0, 1], [-1, 1]); // Probability for class 1 (AI)
+            // Predict on the validation set (xVal)
+            const rawValPredictions = model.predict(xVal);
             
-            // Store results in the global predictions object
-            predictions.probAI = probAI; // Store as tensor for fast calculation
+            // Extract probability for class 1 (AI)
+            // Note: rawValPredictions is a 2D tensor [num_samples, 2]
+            valProbAI = rawValPredictions.slice([0, 1], [-1, 1]); 
             
             // Initial metric calculation
             calculateMetrics();
 
-            document.getElementById('prediction-output').innerText = '✅ Predictions complete. Adjust threshold to view metrics.';
-            enableButton('export-btn', true); // Enable export after initial prediction
+            document.getElementById('prediction-output').innerText = '✅ Evaluation complete on Validation set. Adjust threshold to view metrics.';
+            document.getElementById('threshold-slider').disabled = false;
+            enableButton('export-btn', true); 
         });
 
-        enableButton('predict-btn', true);
+        enableButton('evaluate-btn', true);
     };
 
 
     window.calculateMetrics = () => {
-        if (!predictions || !predictions.probAI) return;
+        if (!valProbAI) return;
 
         tf.tidy(() => {
             const threshold = parseFloat(document.getElementById('threshold-slider').value);
             document.getElementById('threshold-value').innerText = threshold.toFixed(2);
 
-            const probAI = predictions.probAI;
-            const trueLabels = yTrain.argMax(1); // True class indices [0, 1, 0, ...]
+            // True labels are derived from the yVal one-hot tensor
+            const trueLabels = yVal.argMax(1); 
             
             // Convert probabilities to binary predictions based on threshold
-            const predLabels = probAI.greater(threshold).cast('int32');
+            const predLabels = valProbAI.greater(threshold).cast('int32');
             
             // 1. Confusion Matrix
+            // tfvis.metrics.confusionMatrix expects true labels and predicted labels
             const confusionMatrix = tfvis.metrics.confusionMatrix(trueLabels, predLabels, 2);
+            // TN=0, FP=1, FN=2, TP=3 (flat array indices)
             const [TN, FP, FN, TP] = confusionMatrix.dataSync();
 
             const matrixHtml = `
@@ -639,34 +697,41 @@
             // Clean up Tensors
             trueLabels.dispose();
             predLabels.dispose();
+            confusionMatrix.dispose();
         });
         
         // Update Confusion Matrix Title
-        document.querySelector('#confusion-matrix').closest('.metric-card').querySelector('h3').innerText = `Confusion Matrix (Threshold: ${document.getElementById('threshold-value').innerText})`;
+        document.querySelector('#metrics-output .metric-card:last-child h3').innerText = `Confusion Matrix (Threshold: ${document.getElementById('threshold-value').innerText})`;
     };
     
     // ==================================================================================
     // Step 9: Export Results
     // ==================================================================================
     window.exportResults = async () => {
-        if (!predictions || !predictions.probAI) {
-            updateStatus('export-status', 'Run prediction first.', true);
+        if (!model || !testSequencesPadded) {
+            updateStatus('export-status', 'Model or Test Data not ready.', true);
             return;
         }
         enableButton('export-btn', false);
         
-        document.getElementById('export-status').innerText = 'Generating predictions CSV...';
+        document.getElementById('export-status').innerText = 'Running predictions on test.csv and generating results CSV...';
         
         await tf.nextFrame();
 
         tf.tidy(() => {
-            const probAIArray = predictions.probAI.dataSync();
             const threshold = parseFloat(document.getElementById('threshold-slider').value);
+            const xTestRawTexts = testData.map(row => row[1]); 
+
+            // Predict on the UNLABELED test data (test.csv)
+            const testPredictions = model.predict(testSequencesPadded);
+            // Get probabilities for class 1 (AI)
+            const probAIArray = testPredictions.slice([0, 1], [-1, 1]).dataSync(); 
 
             let csv = "Text_Snippet,Prediction_Label (1=AI),Probability_AI\n";
             
-            for (let i = 0; i < xTestRaw.length; i++) {
-                const textSnippet = String(xTestRaw[i]).substring(0, 50).replace(/,/g, ''); // Shorten and sanitize text
+            for (let i = 0; i < xTestRawTexts.length; i++) {
+                // Sanitize text for CSV: remove commas and newlines, truncate
+                const textSnippet = String(xTestRawTexts[i]).substring(0, 100).replace(/,/g, ' ').replace(/\n/g, ' '); 
                 const predictionLabel = probAIArray[i] > threshold ? 1 : 0;
                 const prob = probAIArray[i].toFixed(4);
                 
@@ -677,11 +742,13 @@
             const link = document.createElement("a");
             const url = URL.createObjectURL(blob);
             link.setAttribute("href", url);
-            link.setAttribute("download", "prediction_results.csv");
+            link.setAttribute("download", "prediction_results_test.csv");
             link.style.visibility = 'hidden';
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+            
+            testPredictions.dispose(); // Clean up tensor
 
             updateStatus('export-status', '✅ Export complete! Check your downloads folder.', false);
         });
